@@ -13,20 +13,6 @@
 // INHX32 format valid record types: 00, 01, 04, 05
 // finding 0xAA55 at location 0x2000 which is 55 AA (little endian) at 0x4000
 
-
-/*
-As the next step in the process, we’d like you to complete a small 
-project called Hex Injector in the language you are most familiar with.
-The challenge is designed to demonstrate your ability to write clear,
-functional code; please also consider how this tool might be used in a real production setting.
-
-Please see the attached project description for details on the task and deliverables. Once complete,
-send back your solution along with any notes or supporting files you’d like to include.
-
-Please take a week to complete this. Let us know if you need more time or have any questions.
-We look forward to reviewing your work.
-*/
-
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -37,11 +23,12 @@ We look forward to reviewing your work.
 
 using namespace std;
 
+
 bool verify_checksum(string line)
 {
     int sum = 0;
     for (int i = 1; i < line.length(); i += 2)
-        sum += stoi(line.substr(i, 2), nullptr, 16);
+        sum += stoi((line.substr(i, 2)), nullptr, 16);
     return (sum & 0xFF) == 0;
 }
 
@@ -50,177 +37,188 @@ string recalc_checksum(string line)
     int sum = 0;
     ostringstream ss;
     for (int i = 1; i < line.length() - 2; i += 2)
-        sum += stoi(line.substr(i, 2), nullptr, 16);
+        sum += stoi((line.substr(i, 2)), nullptr, 16);
     ss << hex << setfill('0') << setw(2) << ((~sum + 1) & 0xFF);
     return ss.str();
 }
 
-void inputs(ifstream &file, string &file_name, string &serial_num, int argc, char *argv[])
+bool check_file(ifstream &file, const string &file_name)
 {
-    if (argc == 3)
+    file.open(file_name + ".hex");
+    if (!file)
     {
-        file_name = argv[1];
-        serial_num = argv[2];
+        cout << "Error: file not found\n";
+        return false;
     }
-    while (true)
+    return true;
+}
+
+bool check_serial(const string &serial_num)
+{
+    if (serial_num.length() != 4 || !all_of(serial_num.begin(), serial_num.end(), ::isxdigit))
     {
-        if (argc == 1)
-        {
-            cout << "Enter your firmware hexfile file_name (without .hex extension): \n";
-            cin >> file_name;
-        }
-        file.open(file_name + ".hex");
-        if (file)
-            break;
-        cout << "Error: file not found, try again\n";
-        if (argc == 3)
-            exit(1);
-    }
-    while (true)
-    {
-        if (argc ==1)
-        {
-            cout << "Enter serial number hex in little endian (AA55 -> 55AA) : \n";
-            cin >> serial_num;
-        }
-        if (serial_num.length() == 4 && all_of(serial_num.begin(), serial_num.end(), ::isxdigit))
-            break;
         cout << "Error: invalid hex, enter 4 hex digits\n";
-        if (argc == 3)
-            exit(1);
+        return false;
+    }
+    return true;
+}
+
+void print_status(int ph, const string &file_name, const ostringstream &buffer)
+{
+    bool overwrite = (bool)ifstream("Injected_" + file_name + ".hex");
+    if (ph == 0)
+    {
+        cout << "Error: placeholder 0xAA55 not found at 0x2000\n";
+        cout << "Aborted.\n"; exit(1);
+    }
+    else if (ph == 1)
+    {
+        ofstream injected_file("Injected_" + file_name + ".hex");
+        injected_file << buffer.str();
+        cout << "Saved " << "Injected_" << file_name << ".hex" << (overwrite ? " (overwritten)" : "") << "\n";
+    }
+    else if (ph > 1)
+    {
+        cout << "Error: duplicate records with address 0x2000\n";
+        cout << "Aborted.\n"; exit(1);
     }
 }
 
-void report(bool placeholder, bool checksum, string unedited, string edited, string file_name, ostringstream &buffer, queue<int> &error_addresses)
+void inputs(ifstream &file, string &file_name, string &serial_num)
 {
-    if (placeholder && !checksum)
+    while (true)
     {
-        cout << "Unedited line:  " << unedited << "\n";
-        cout << "Edited line:    " << edited << "\n";
-        cout << "Serial number injected successfully!\n";
-        ifstream check("Injected_" + file_name + ".hex");
-        if (check)
-            cout << "\nNote: overwriting existing file <Injected_" << file_name << ".hex>\n";
-        check.close();
-        ofstream file2("Injected_" + file_name + ".hex");
-        file2 << buffer.str();
+        cout << "Enter your firmware hexfile file_name (without .hex extension): \n";
+        cin >> file_name;
+        if (check_file(file, file_name))
+            break;
     }
-    else
+    while (true)
     {
-        if (!placeholder)
-            cout << "Injection failed: Placeholder missing from address 0x2000\n";
-        if (checksum)
-        {
-            cout << "Injection failed: Checksum error at address: \n";
-            while (!error_addresses.empty())
-            {
-                cout << "   0x" << hex << error_addresses.front() << "\n";
-                error_addresses.pop();
-            }
-        }
+        cout << "Enter serial number hex in little endian (AA55 -> 55AA) : \n";
+        cin >> serial_num;
+        if (check_serial(serial_num))
+            break;
     }
 }
 
-
-void process(ifstream &file, ostringstream &buffer, string &unedited, string &edited, string &serial_num, bool &placeholder, bool &checksum, queue<int> &error_addresses)
+bool Warnings(ifstream &file)
 {
-    string line, address, record, upper_address = "";
-    int byte_count, Total_address;
+    file.clear();
+    file.seekg(0);
+    string line;
+    int line_num = 0;
+    bool eof_found = false;
+    bool crash = false;
     while (getline(file, line))
     {
-        address = line.substr(3, 4);
-        record = line.substr(7, 2);
-        byte_count = stoi(line.substr(1, 2), nullptr, 16);
-        Total_address = stoi(upper_address + address, nullptr, 16);
-
-        if (!verify_checksum(line))
+        line_num++;
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        int byte_count = stoi(line.substr(1, 2), nullptr, 16);
+        
+        if (line.length() < 11)
         {
-            error_addresses.push(Total_address / 2);
-            checksum = 1;
+            cout << "[Line "<< setw(5) << line_num << "] Error: Line too short\n";
+            crash = true;
         }
-
-        if (record == "00")
+        else
         {
-            if (Total_address <= 0x4000 && 0x4000 < Total_address + byte_count)
+            if (line.length() != 11 + byte_count * 2)
             {
-                int bytes_pos = 9 + ((0x4000 - Total_address) * 2);
-                string bytes = line.substr(bytes_pos, 8);
-                if (bytes == "55aa0000" || bytes == "55AA0000")
-                {
-                    for (auto &c : serial_num) (bytes == "55AA0000") ? c = toupper(c) : c = tolower(c);
-                    unedited = line;
-                    line.replace(bytes_pos, 4, serial_num);
-                    line.replace(line.length() - 2, 2, recalc_checksum(line));
-                    edited = line;
-                    placeholder = 1;
-                }
+                cout << "[Line "<< setw(5) << line_num << "] Error: Byte count mismatch\n";
+                crash = true;
+            }
+            if (!verify_checksum(line))
+            {
+                cout << "[Line "<< setw(5) << line_num << "] Error: Checksum error\n";
+                crash = true;
+            }
+            if (line.substr(7, 2) == "01")
+                eof_found = true;
+        }
+    }
+    if (!eof_found)
+        cout << "[Line "<< setw(5) << line_num << "] Warning: End of file record not found\n";
+    if (!crash && eof_found)
+        cout << "No issues found.\n";
+    return crash;
+}
+void process(ifstream &file, const string &file_name, string &serial_num)
+{
+    string line, address, record, upper_address = "";
+    int byte_count, real_address,line_num=0, ph=0;
+
+    ostringstream buffer;
+    file.clear();
+    file.seekg(0);
+
+    while (getline(file, line))
+    {
+        line_num++;
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        address      = line.substr(3, 4);
+        record       = line.substr(7, 2);
+        byte_count   = stoi(line.substr(1, 2)      , nullptr, 16);
+        real_address = stoi(upper_address + address, nullptr, 16);
+
+        if (record == "00" && real_address <= 0x4000 && 0x4000 < real_address + byte_count)
+        {
+            int bytes_pos = 9 + ((0x4000 - real_address) * 2);
+            string bytes  = line.substr(bytes_pos, 8);
+            if (bytes == "55aa0000" || bytes == "55AA0000")
+            {
+                ph++;
+                for (auto &c : serial_num) (bytes == "55AA0000") ? c = toupper(c) : c = tolower(c);
+                cout << "[Line " << setw(5) << line_num << "] original: " << line << "\n";
+                line.replace(bytes_pos, 4, serial_num);
+                line.replace(line.length() - 2, 2, recalc_checksum(line));
+                cout << "[Line " << setw(5) << line_num << "] updated:  " << line << "\n";
             }
         }
         else if (record == "04")
             upper_address = line.substr(9, 4);
         buffer << line << "\n";
-        if(record == "01")
+        if (record == "01")
             break;
     }
-}
-
-void Warnings(string file_name)
-{
-    string line;
-    int line_num = 0;
-    bool eof_found = false;
-    ifstream file(file_name + ".hex");
-    while (getline(file, line))
-    {
-        line_num++;
-        int byte_count = stoi(line.substr(1, 2), nullptr, 16);
-
-        if (line.length() < 11)
-        {
-            cout << "Warning: line too short at line " << line_num << "\n"; continue;
-        }
-        if (eof_found)
-            cout << "Warning: data after EOF record at line " << line_num << "\n";
-        if (line.length() != 11 + byte_count * 2)
-            cout << "Warning: byte count mismatch at line " << line_num << "\n";
-        if (!verify_checksum(line))
-            cout << "Warning: checksum error at line " << line_num << "\n";
-        if (line.substr(7, 2) == "01")
-            eof_found = true;
-    }
-    if (!eof_found)
-        cout << "Warning: no EOF record found\n";
+    print_status(ph, file_name, buffer);
 }
 
 int main(int argc, char *argv[])
 {
+    string file_name, serial_num;
     ifstream file;
-    ostringstream buffer;
-    queue<int> error_addresses;
-    bool placeholder = 0, checksum = 0;
-    string file_name, serial_num, unedited, edited;
-
     if (argc > 3)
     {
         cout << "Injecting: ./Hex_injector <firmware_hexfile_name> <serial_number_hex>\n"
              << "Verifying: ./Hex_injector <firmware_hexfile_name>\n";
         exit(1);
-    }    
+    }
+    else if (argc == 3)
+    {
+        file_name = argv[1];
+        serial_num = argv[2];
+        if(!check_file(file, file_name) || !check_serial(serial_num) || Warnings(file))
+        {
+            cout << "Aborted.\n"; exit(1);
+        }
+        process (file, file_name, serial_num);
+    }
     else if (argc == 2)
     {
-        Warnings(argv[1]);
-        exit(0);
+        file_name = argv[1];
+        if (!check_file(file, file_name)) exit(1);
+        Warnings(file);
     }
-
-    // Handle user inputs
-    inputs(file, file_name, serial_num, argc, argv);
-
-    // Process hex file
-    process(file, buffer, unedited, edited, serial_num, placeholder, checksum, error_addresses);
-
-    // report results
-    report(placeholder, checksum, unedited, edited, file_name, buffer, error_addresses);
-
-    // Warnings hex file before processing
-    Warnings(file_name);
+    else
+    {
+        inputs  (file, file_name, serial_num);
+        if (Warnings(file))
+        {
+            cout<< "Aborted.\n"; exit(1);
+        }
+        process (file, file_name, serial_num);
+    }
 }
