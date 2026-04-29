@@ -5,16 +5,13 @@
 
 REQUIREMENTS
 ------------
-  - C++11 or later
+  - C++17 or later (Required for <filesystem> support)
   - Any standard C++ compiler (GCC, Clang, MSVC)
 
 COMPILING
 ----------
-  Windows (GCC/MinGW):
-    g++ Hex_injector.cpp -o Hex_injector
-
-  Linux/macOS:
-    g++ Hex_injector.cpp -o Hex_injector
+  Windows (GCC/MinGW) and Linux/macOS:
+    g++ -std=c++17 Hex_injector.cpp -o Hex_injector
 
 USAGE
 ------
@@ -22,58 +19,53 @@ USAGE
     ./Hex_injector
 
   Verify:
-    ./Hex_injector <filename>
+    ./Hex_injector <filepath>
 
   Verify and Inject:
-    ./Hex_injector <filename> <serial_number>
+    ./Hex_injector <filepath> <serial_number>
 
   Arguments:
-    <filename>       Firmware hex file name WITHOUT the .hex extension.
-                     File must exist in the same directory.
+    <filename>       Firmware hex file path without .hex extension.
+                     Command-line mode: Paths with spaces require quotes "path with spaces\file"
+                     Interactive mode: Enter paths directly without quotes
     <serial_number>  4-digit hex value in little-endian format.
-                     Case insensitive. (e.g. AA55 entered as 55AA)
+                     Case is adapted automatically to file format. (e.g. AA55 entered as 55AA)
 
 EXAMPLES
 ---------
   Interactive mode:
     > ./Hex_injector
     Enter your firmware hexfile name (without .hex extension):
-    CrystalFontz_04.production
+    Hex/CrystalFontz_04.production
     Enter serial number hex in little endian (AA55 -> 55AA):
-    ff22
+    ff22 
     No issues found.
     [Line  1252] original: :0440000055aa0000bd
     [Line  1252] updated:  :04400000ff2200009b
-    Saved Injected_CrystalFontz_04.production.hex
+    Saved Hex\Injected_CrystalFontz_04.production.hex
 
   Verify only:
-    > ./Hex_injector CrystalFontz_04.production
+    > ./Hex_injector Hex\CrystalFontz_04.production
     No issues found.
 
   Verify and Inject:
-    > ./Hex_injector CrystalFontz_04.production ff22
+    > ./Hex_injector Hex\CrystalFontz_04.production ff22
     No issues found.
     [Line  1252] original: :0440000055aa0000bd
     [Line  1252] updated:  :04400000ff2200009b
-    Saved Injected_CrystalFontz_04.production.hex
-
-  Compile and run (Windows PowerShell):
-    g++ Hex_injector.cpp -o Hex_injector; ./Hex_injector CrystalFontz_04.production ff22
-
-  Compile and run (Linux/macOS):
-    g++ Hex_injector.cpp -o Hex_injector && ./Hex_injector CrystalFontz_04.production ff22
+    Saved Hex\Injected_CrystalFontz_04.production.hex
 
 OUTPUT
 -------
   The injected file is saved in the same directory as:
-    Injected_<filename>.hex
+    path\Injected_<filename>.hex
 
   Example:
     Input:   CrystalFontz_04.production.hex
-    Output:  Injected_CrystalFontz_04.production.hex
+    Output:  _Injected_CrystalFontz_04.production.hex
 
   If the output file already exists it is overwritten and noted:
-    Saved Injected_CrystalFontz_04.production.hex (overwritten)
+    Saved _Injected_CrystalFontz_04.production.hex (OVERWRITTEN)
 
 ERROR CASES
 ------------
@@ -97,12 +89,41 @@ ERROR CASES
   - Missing EOF record (warning, injection continues):
       [Line     1] Warning: End of file record not found
 
+  - Line too short:
+      [Line     1] Error: Line too short
+  
 TESTING
 -------
-Run: python3 Testbench.py
+  A Python test script (Testbench.py) is included to validate the injector's 
+  functionality, error handling, and file parsing.
 
-Validates edge cases, error handling, and all usage modes.
+  Usage:
+    > python Testbench.py
 
+  Successful validation:
+    ✓ Valid placeholder
+    ✓ Valid extended address
+    ✓ Placeholder in large record
+    ✓ CRLF endings
+    ✓ Missing placeholder
+    ✓ Bad bytecount
+    ✓ Bad checksum
+    ✓ Multiple placeholders same addr
+    ✓ Missing EOF
+    ✓ Verify valid
+    ✓ Verify bad checksum
+    ✓ Interactive valid
+    ✓ Interactive bad file
+    All 13 passed
+
+  Failure detection (Example):
+    ✗ Bad checksum
+        → exit code 0, expected 1
+        → File was saved but should not have been
+          No issues found.
+          [Line     1] original: :0440000055AA0000BD
+          [Line     1] updated:  :04400000AAEE000024
+          Saved Injected_bad_checksum.hex
 NOTES
 ------
   - The firmware must contain the placeholder value 0xAA55 (55 AA 00 00 in
@@ -110,6 +131,6 @@ NOTES
   - Supports Extended Linear Address records (type 04) for multi-segment firmware.
   - Original record ordering and addressing are preserved in the output file.
   - Checksum is automatically recalculated after injection.
-  - Files with checksum errors or byte count mismatches are rejected before injection.
+  - Files with checksum errors or byte count mismatches are rejected.
 
 ================================================================================
