@@ -71,8 +71,8 @@ path\_Injected_<filename>.hex
 ```
 
 Example:
-- Input:   CrystalFontz_04.production.hex
-- Output:  _Injected_CrystalFontz_04.production.hex
+- Input:   Hex/CrystalFontz_04.production (no .hex extension)
+- Output:  Hex_Injected_CrystalFontz_04.production.hex
 
 If the output file already exists it is overwritten and noted:
 ```
