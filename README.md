@@ -46,7 +46,7 @@ ff22
 No issues found.
 [Line  1252] original: :0440000055aa0000bd
 [Line  1252] updated:  :04400000ff2200009b
-Saved Hex\Injected_CrystalFontz_04.production.hex
+Saved Hex\_Injected_CrystalFontz_04.production.hex
 ```
 
 Verify only:
@@ -61,13 +61,13 @@ Verify and Inject:
 No issues found.
 [Line  1252] original: :0440000055aa0000bd
 [Line  1252] updated:  :04400000ff2200009b
-Saved Hex\Injected_CrystalFontz_04.production.hex
+Saved Hex\_Injected_CrystalFontz_04.production.hex
 ```
 
 ## Output
 The injected file is saved in the same directory as:
 ```
-path\Injected_<filename>.hex
+path\_Injected_<filename>.hex
 ```
 
 Example:
@@ -145,7 +145,7 @@ Failure detection (Example):
       No issues found.
       [Line     1] original: :0440000055AA0000BD
       [Line     1] updated:  :04400000AAEE000024
-      Saved Injected_bad_checksum.hex
+      Saved _Injected_bad_checksum.hex
 ```
 
 ## Notes
